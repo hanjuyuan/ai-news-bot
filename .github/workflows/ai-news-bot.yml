@@ -1,0 +1,288 @@
+name: AI News Bot
+
+on:
+  # 定时触发
+  schedule:
+    # 每日15:30 UTC+8 (07:30 UTC)
+    - cron: '30 7 * * *'
+    # 每周一9:00 UTC+8 (01:00 UTC)
+    - cron: '0 1 * * 1'
+    # 每月最后一天 UTC+8 (运行时间: 每月最后一天 00:01 UTC - 北京时间 8:01)
+    - cron: '1 0 L * *'
+
+  # 手动触发 (便于测试)
+  workflow_dispatch:
+    inputs:
+      action_type:
+        description: '选择执行的操作'
+        required: true
+        default: 'daily'
+        type: choice
+        options:
+        - daily
+        - weekly
+        - monthly
+        - test
+        - startup
+
+  # 推送触发（仅在main分支推送时使用）
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+
+jobs:
+  daily-news:
+    runs-on: ubuntu-latest
+    if: (github.event_name == 'schedule' && github.event.schedule == '30 7 * * *') || (github.event_name == 'workflow_dispatch' && github.event.inputs.action_type == 'daily')
+
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+
+    - name: 设置Python环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: 缓存Python依赖
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: 安装依赖
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: 获取每日新闻
+      run: |
+        echo "正在获取今日AI新闻..."
+        python -c "
+        from src.daily_news import DailyNewsScraper
+        from src.dingtalk_sender import DingTalkSender
+
+        # 每日新闻抓取
+        scraper = DailyNewsScraper()
+        daily_summary = scraper.get_daily_news_summary()
+
+        # 发送到钉钉
+        sender = DingTalkSender()
+        result = sender.send_daily_news(daily_summary)
+
+        print('每日新闻推送完成:', result)
+        if not result.get('success'):
+            raise Exception(result.get('error', '发送失败'))
+        "
+
+    - name: 保存每日数据
+      uses: actions/upload-artifact@v3
+      with:
+        name: daily-news-${{ github.run_number }}
+        path: data/
+        retention-days: 30
+
+  weekly-summary:
+    runs-on: ubuntu-latest
+    if: (github.event_name == 'schedule' && github.event.schedule == '0 1 * * 1') || (github.event_name == 'workflow_dispatch' && github.event.inputs.action_type == 'weekly')
+
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+
+    - name: 设置Python环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: 缓存Python依赖
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: 安装依赖
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: 生成周总结
+      run: |
+        echo "正在生成本周AI总结..."
+        python -c "
+        from src.weekly_summary import WeeklySummaryGenerator
+        from src.dingtalk_sender import DingTalkSender
+
+        # 生成周总结
+        generator = WeeklySummaryGenerator()
+        weekly_summary = generator.generate_weekly_summary()
+
+        # 发送到钉钉
+        sender = DingTalkSender()
+        result = sender.send_weekly_summary(weekly_summary)
+
+        print('周总结推送完成:', result)
+        if not result.get('success'):
+            raise Exception(result.get('error', '发送失败'))
+        "
+
+    - name: 保存周报数据
+      uses: actions/upload-artifact@v3
+      with:
+        name: weekly-summary-${{ github.run_number }}
+        path: data/
+        retention-days: 90
+
+  monthly-summary:
+    runs-on: ubuntu-latest
+    if: (github.event_name == 'schedule' && github.event.schedule == '1 0 L * *') || (github.event_name == 'workflow_dispatch' && github.event.inputs.action_type == 'monthly')
+
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+
+    - name: 设置Python环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: 缓存Python依赖
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: 安装依赖
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: 生成月总结
+      run: |
+        echo "正在生成本月AI总结..."
+        python -c "
+        from src.monthly_summary import MonthlySummaryGenerator
+        from src.dingtalk_sender import DingTalkSender
+
+        # 生成月总结
+        generator = MonthlySummaryGenerator()
+        monthly_summary = generator.generate_monthly_summary()
+
+        # 发送到钉钉
+        sender = DingTalkSender()
+        result = sender.send_monthly_summary(monthly_summary)
+
+        print('月总结推送完成:', result)
+        if not result.get('success'):
+            raise Exception(result.get('error', '发送失败'))
+        "
+
+    - name: 保存月报数据
+      uses: actions/upload-artifact@v3
+      with:
+        name: monthly-summary-${{ github.run_number }}
+        path: data/
+        retention-days: 365
+
+  test-setup:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action_type == 'test'
+
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+
+    - name: 设置Python环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: 安装依赖
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: 运行连接测试
+      run: |
+        echo "正在测试钉钉机器人连接..."
+        python -c "
+        from src.dingtalk_sender import DingTalkSender
+
+        sender = DingTalkSender()
+
+        # 验证配置
+        config = sender.validate_config()
+        print('配置状态:', config)
+
+        if config['is_valid']:
+            # 发送测试消息
+            result = sender.test_connection()
+            print('测试结果:', result)
+        else:
+            print('❌ 配置无效，请检查 GitHub Secrets')
+            exit(1)
+        "
+
+  startup-notification:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action_type == 'startup'
+
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+
+    - name: 设置Python环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: 安装依赖
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: 发送启动通知
+      run: |
+        echo "正在发送启动通知..."
+        python -c "
+        from src.dingtalk_sender import DingTalkSender
+
+        sender = DingTalkSender()
+        sender.send_startup_message()
+        "
+
+  health-check:
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [daily-news, weekly-summary, monthly-summary, test-setup]
+
+    steps:
+    - name: 检查任务状态
+      run: |
+        echo "任务状态检查:"
+        echo "✅ 所有任务运行状态: ${{ job.status }}"
+        echo "📧 如有错误，请查看具体任务的日志"
+
+  # 错误通知
+  notify-failure:
+    runs-on: ubuntu-latest
+    if: failure()
+    steps:
+    - name: 发送错误通知
+      run: |
+        python -c "
+        from src.dingtalk_sender import DingTalkSender
+
+        sender = DingTalkSender()
+        sender.send_error_message('GitHub Actions运行失败', '请检查GitHub Actions日志获取详细信息')
+        "
+      env:
+        DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
+        DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
