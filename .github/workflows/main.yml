@@ -1,19 +1,38 @@
-name: 钉钉推送通知
+name: 每日AI资讯自动推送
 
-on: [push]
+on:
+  push: # 只要你 push 代码，就会触发一次（方便测试）
+  schedule:
+    # 定时设置：每天北京时间早上 9:00 自动运行
+    # 注意：GitHub 使用的是 UTC 时间，比北京时间晚 8 小时。01:00 UTC = 09:00 北京时间
+    - cron: '0 1 * * *'
 
 jobs:
-  notify:
+  run-bot:
     runs-on: ubuntu-latest
     steps:
-      - name: 发送钉钉消息
+      - name: 1. 拉取代码
+        uses: actions/checkout@v3
+
+      - name: 2. 安装 Python 环境
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: 3. 安装依赖库
+        run: |
+          pip install -r requirements.txt
+
+      - name: 4. 运行 AI 机器人脚本
+        # 假设你的入口文件是 run.py
+        # 这里通过环境变量把你的钉钉 Webhook 传给 Python 代码
+        env:
+          DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
+        run: python run.py
+
+      - name: 5. 失败提醒 (可选)
+        if: failure()
         run: |
           curl '${{ secrets.DINGTALK_WEBHOOK }}' \
           -H 'Content-Type: application/json' \
-          -d '{
-            "msgtype": "markdown",
-            "markdown": {
-              "title": "项目更新通知",
-              "text": "### 🚀 GitHub 项目更新\n**项目**: 人工智能新闻机器人\n**提交人**: ${{ github.actor }}\n**说明**: ${{ github.event.head_commit.message }}\n**关键词**: 机器人\n\n[点击查看详情](${{ github.event.head_commit.url }})"
-            }
-          }'
+          -d '{"msgtype":"text","text":{"content":"❌ 机器人运行失败，请检查 GitHub Actions 日志！关键词：机器人"}}'
