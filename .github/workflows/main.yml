@@ -1,11 +1,10 @@
 name: 每日AI资讯自动推送
 
 on:
-  push: # 只要你 push 代码，就会触发一次（方便测试）
+  push:
+  workflow_dispatch: # 允许手动运行
   schedule:
-    # 定时设置：每天北京时间早上 9:00 自动运行
-    # 注意：GitHub 使用的是 UTC 时间，比北京时间晚 8 小时。01:00 UTC = 09:00 北京时间
-    - cron: '0 1 * * *'
+    - cron: '0 1 * * *' # 每天北京时间 9:00 运行
 
 jobs:
   run-bot:
@@ -14,23 +13,27 @@ jobs:
       - name: 1. 拉取代码
         uses: actions/checkout@v3
 
-      - name: 2. 安装 Python 环境
+      - name: 2. 安装 Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
-      - name: 3. 安装依赖库
+      - name: 3. 安装依赖
+        # 这里我直接手动安装，防止 requirements.txt 里的中文干扰
         run: |
-          pip install -r requirements.txt
+          pip install requests beautifulsoup4 feedparser schedule python-dateutil lxml
 
-      - name: 4. 运行 AI 机器人脚本
-        # 假设你的入口文件是 run.py
-        # 这里通过环境变量把你的钉钉 Webhook 传给 Python 代码
+      - name: 4. 创建数据目录
+        run: mkdir -p data
+
+      - name: 5. 运行机器人
         env:
           DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
-        run: python run.py
+          DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
+        # 【关键修改】后面加上了 daily 参数
+        run: python run.py daily
 
-      - name: 5. 失败提醒 (可选)
+      - name: 6. 运行失败提醒
         if: failure()
         run: |
           curl '${{ secrets.DINGTALK_WEBHOOK }}' \
