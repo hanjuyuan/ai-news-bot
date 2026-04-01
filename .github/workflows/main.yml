@@ -1,10 +1,17 @@
-name: 每日AI资讯自动推送
+name: AI新闻机器人定时任务
 
 on:
   push:
-  workflow_dispatch: # 允许手动运行
+  workflow_dispatch:
   schedule:
-    - cron: '0 1 * * *' # 每天北京时间 9:00 运行
+    # 每天北京时间 11:00 (UTC 03:00)
+    - cron: '0 3 * * *'
+    # 每天北京时间 15:30 (UTC 07:30)
+    - cron: '30 7 * * *'
+    # 每周一北京时间 09:00 (UTC 01:00) 运行周总结
+    - cron: '0 1 * * 1'
+    # 每月最后一天北京时间 09:00 (UTC 01:00) 运行月总结
+    - cron: '0 1 28-31 * *'
 
 jobs:
   run-bot:
@@ -19,23 +26,29 @@ jobs:
           python-version: '3.9'
 
       - name: 3. 安装依赖
-        # 这里我直接手动安装，防止 requirements.txt 里的中文干扰
         run: |
-          pip install requests beautifulsoup4 feedparser schedule python-dateutil lxml
+          pip install requests beautifulsoup4 feedparser python-dateutil lxml
 
-      - name: 4. 创建数据目录
+      - name: 4. 创建文件夹
         run: mkdir -p data
 
-      - name: 5. 运行机器人
+      - name: 5. 运行机器人逻辑
         env:
           DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
           DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
-        # 【关键修改】后面加上了 daily 参数
-        run: python run.py daily
-
-      - name: 6. 运行失败提醒
-        if: failure()
         run: |
-          curl '${{ secrets.DINGTALK_WEBHOOK }}' \
-          -H 'Content-Type: application/json' \
-          -d '{"msgtype":"text","text":{"content":"❌ 机器人运行失败，请检查 GitHub Actions 日志！关键词：机器人"}}'
+          # 获取北京时间的小时和日期
+          HOUR=$(date -u -d "+8 hours" +%H)
+          MINUTE=$(date -u -d "+8 hours" +%M)
+          DAY_OF_WEEK=$(date -u -d "+8 hours" +%u)
+          
+          if [ "$HOUR" == "09" ] && [ "$DAY_OF_WEEK" == "1" ]; then
+            echo "执行周总结任务..."
+            python run.py weekly
+          elif [ "$HOUR" == "09" ] && [ "$(date -d "+8 hours +1 day" +%d)" == "01" ]; then
+            echo "执行月总结任务..."
+            python run.py monthly
+          else
+            echo "执行每日AI资讯推送..."
+            python run.py daily
+          fi
