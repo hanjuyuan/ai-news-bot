@@ -1,20 +1,19 @@
 name: 钉钉推送通知
 
-on: [push] # 每次你 push 代码，就会触发这个通知
+on: [push]
 
 jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
       - name: 发送钉钉消息
-        uses: zf-sh/dingtalk-action@master
-        with:
-          dingtalk_token: ${{ secrets.DINGTALK_WEBHOOK }}
-          msg_type: markdown
-          content: |
-            ### 🚀 GitHub 项目更新通知
-            **项目名称**: 人工智能新闻机器人
-            **提交人员**: ${{ github.actor }}
-            **提交说明**: ${{ github.event.head_commit.message }}
-            **关键词**: 机器人
-            [点击查看代码详情](${{ github.event.head_commit.url }})
+        run: |
+          curl '${{ secrets.DINGTALK_WEBHOOK }}' \
+          -H 'Content-Type: application/json' \
+          -d '{
+            "msgtype": "markdown",
+            "markdown": {
+              "title": "项目更新通知",
+              "text": "### 🚀 GitHub 项目更新\n**项目**: 人工智能新闻机器人\n**提交人**: ${{ github.actor }}\n**说明**: ${{ github.event.head_commit.message }}\n**关键词**: 机器人\n\n[点击查看详情](${{ github.event.head_commit.url }})"
+            }
+          }'
