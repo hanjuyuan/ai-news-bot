@@ -4,7 +4,7 @@
 钉钉消息发送模块
 通过Webhook将AI新闻推送到钉钉群
 """
-
+from typing import Dict, Any
 import requests
 import json
 import time
